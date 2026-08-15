@@ -52,6 +52,42 @@ test('uploads, lists, previews, and deletes a file', async t => {
   assert.equal((await fetch(uploaded.url.replace('https://files.example.test', baseUrl))).status, 404);
 });
 
+test('accepts a raw file request body like Apple Shortcuts', async t => {
+  const { baseUrl } = await fixture(t);
+  const upload = await fetch(`${baseUrl}/api/upload`, {
+    method: 'POST',
+    headers: {
+      'x-api-key': KEY,
+      'content-type': 'image/jpeg',
+      'x-filename': 'shortcut photo.jpg'
+    },
+    body: Buffer.from([0xff, 0xd8, 0xff, 0xd9])
+  });
+  assert.equal(upload.status, 201);
+  const uploaded = await upload.json();
+  assert.equal(uploaded.name, 'shortcut photo.jpg');
+  assert.equal(uploaded.type, 'image/jpeg');
+  assert.equal(uploaded.size, 4);
+
+  const preview = await fetch(uploaded.url.replace('https://files.example.test', baseUrl));
+  assert.equal(preview.status, 200);
+  assert.match(preview.headers.get('content-disposition'), /^inline;/);
+  assert.deepEqual(Buffer.from(await preview.arrayBuffer()), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+});
+
+test('infers a filename when a raw upload does not provide one', async t => {
+  const { baseUrl } = await fixture(t);
+  const upload = await fetch(`${baseUrl}/upload`, {
+    method: 'POST',
+    headers: { 'x-api-key': KEY, 'content-type': 'video/quicktime' },
+    body: Buffer.from('raw movie bytes')
+  });
+  assert.equal(upload.status, 201);
+  const uploaded = await upload.json();
+  assert.match(uploaded.name, /^upload-[A-Za-z0-9_-]+\.mov$/);
+  assert.equal(uploaded.type, 'video/quicktime');
+});
+
 test('dashboard login and API key rotation invalidate old access', async t => {
   const { baseUrl } = await fixture(t);
   const login = await fetch(`${baseUrl}/login`, {

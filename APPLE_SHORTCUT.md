@@ -10,12 +10,12 @@ Apple only permits a Shortcut to be imported directly when its export is signed 
 4. Inside the If block, add **Select File**, then add **Set Variable** named `Upload File` to the selected file.
 5. In the Otherwise block, add **Set Variable** named `Upload File` to `Shortcut Input`.
 6. After End If, add a **Text** action containing your API key. Rename its variable to `API Key` if desired.
-7. Add **Get Contents of URL** and expand its options:
+7. Add **Get Contents of URL** inside a **Repeat with Each** block and expand its options:
    - URL: `https://f.aychar.dev/api/upload`
    - Method: `POST`
    - Headers: `X-API-Key` = the `Text`/`API Key` variable
-   - Request Body: `Form`
-   - Add field: type **File**, key `file`, value `Upload File`
+   - Request Body: `File`
+   - File: the current `Repeat Item`
 8. Add **Get Dictionary Value**, choose the key `url` from the response.
 9. Add **Copy to Clipboard** with that value.
 10. Add **Show Result** with: `Uploaded! Link copied: [Dictionary Value]`.

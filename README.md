@@ -23,13 +23,25 @@ Open `http://localhost:3000` and sign in with `INITIAL_API_KEY`. The initial key
 
 ## Upload API
 
-Send one multipart file in the field named `file`. Authentication accepts `X-API-Key` or a Bearer token.
+Authentication accepts `X-API-Key` or a Bearer token. Upload either a multipart file in the field named `file`:
 
 ```bash
 curl -X POST https://f.aychar.dev/api/upload \
   -H "X-API-Key: $FILEUPLOAD_API_KEY" \
   -F "file=@./photo.jpg"
 ```
+
+Or send the file as the entire request body, which is useful for Apple Shortcuts:
+
+```bash
+curl -X POST https://f.aychar.dev/api/upload \
+  -H "X-API-Key: $FILEUPLOAD_API_KEY" \
+  -H "Content-Type: image/jpeg" \
+  -H "X-Filename: photo.jpg" \
+  --data-binary @./photo.jpg
+```
+
+`X-Filename` is optional for raw uploads. Without it, the service generates a filename with an extension inferred from `Content-Type`.
 
 Successful responses use HTTP 201:
 
@@ -71,7 +83,7 @@ Keep `/data` on persistent storage. The dashboard storage setting accepts an abs
 
 ## Apple Shortcut
 
-See [APPLE_SHORTCUT.md](APPLE_SHORTCUT.md) for the phone shortcut recipe. It accepts a file from the Share Sheet or file picker, uploads it, copies the public URL, and shows the result.
+See [APPLE_SHORTCUT.md](APPLE_SHORTCUT.md) for the phone shortcut recipe. It uses Shortcuts' native **File** request body, copies the public URL, and shows the result.
 
 ## Security notes
 

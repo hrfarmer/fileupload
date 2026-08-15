@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
+import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import express from 'express';
 import multer from 'multer';
 import { FileStore } from './store.js';
@@ -11,6 +14,15 @@ const PREVIEWABLE = new Set([
   'video/mp4', 'video/ogg', 'video/quicktime', 'video/webm', 'application/pdf', 'text/plain'
 ]);
 
+const MIME_EXTENSIONS = new Map([
+  ['image/avif', '.avif'], ['image/gif', '.gif'], ['image/heic', '.heic'],
+  ['image/heif', '.heif'], ['image/jpeg', '.jpg'], ['image/png', '.png'], ['image/webp', '.webp'],
+  ['audio/aac', '.aac'], ['audio/flac', '.flac'], ['audio/mpeg', '.mp3'], ['audio/mp4', '.m4a'],
+  ['audio/ogg', '.ogg'], ['audio/wav', '.wav'], ['audio/webm', '.webm'],
+  ['video/mp4', '.mp4'], ['video/ogg', '.ogv'], ['video/quicktime', '.mov'], ['video/webm', '.webm'],
+  ['application/json', '.json'], ['application/pdf', '.pdf'], ['text/plain', '.txt']
+]);
+
 function parseCookies(header = '') {
   return Object.fromEntries(header.split(';').map(part => part.trim().split('='))
     .filter(parts => parts.length === 2).map(([key, value]) => [key, decodeURIComponent(value)]));
@@ -19,6 +31,20 @@ function parseCookies(header = '') {
 function safeFilename(value) {
   const cleaned = path.basename(value || 'file').replace(/[\u0000-\u001f\u007f"\\/]/g, '_').trim();
   return cleaned.slice(0, 180) || 'file';
+}
+
+function requestFilename(req, mimeType, id) {
+  let filename = req.get('x-filename') || req.query.filename;
+  const disposition = req.get('content-disposition') || '';
+  if (!filename) {
+    const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+    filename = encodedMatch?.[1] || plainMatch?.[1];
+  }
+  if (filename) {
+    try { filename = decodeURIComponent(filename); } catch {}
+  }
+  return safeFilename(filename || `upload-${id}${MIME_EXTENSIONS.get(mimeType) || '.bin'}`);
 }
 
 function publicBaseUrl(req, configured) {
@@ -48,8 +74,9 @@ export async function createApp(options = {}) {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
-  app.use(express.json({ limit: '32kb' }));
-  app.use(express.urlencoded({ extended: false, limit: '32kb' }));
+  const isUploadRequest = req => req.method === 'POST' && (req.path === '/api/upload' || req.path === '/upload');
+  app.use(express.json({ limit: '32kb', type: req => !isUploadRequest(req) && req.is('application/json') }));
+  app.use(express.urlencoded({ extended: false, limit: '32kb', type: req => !isUploadRequest(req) && req.is('application/x-www-form-urlencoded') }));
   app.use('/assets', express.static(new URL('./public', import.meta.url).pathname, { maxAge: '1h' }));
 
   const upload = multer({
@@ -99,24 +126,74 @@ export async function createApp(options = {}) {
     res.json({ files: store.listFiles().map(file => fileView(file, req, publicUrl)) });
   });
 
-  const handleUpload = [authenticate, upload.single('file'), async (req, res, next) => {
-    if (!req.file) return res.status(400).json({ error: 'Send one file in the multipart field named "file".' });
-    const record = {
-      id: req.uploadId,
-      originalName: safeFilename(req.file.originalname),
-      mimeType: req.file.mimetype || 'application/octet-stream',
-      size: req.file.size,
-      path: path.resolve(req.file.path),
-      createdAt: new Date().toISOString()
-    };
+  async function saveRecord(record, req, res, next) {
     try {
       await store.addFile(record);
       res.status(201).json(fileView(record, req, publicUrl));
     } catch (error) {
-      await fs.unlink(req.file.path).catch(() => {});
+      await fs.unlink(record.path).catch(() => {});
       next(error);
     }
-  }];
+  }
+
+  async function acceptUpload(req, res, next) {
+    if (req.file) {
+      return saveRecord({
+        id: req.uploadId,
+        originalName: safeFilename(req.file.originalname),
+        mimeType: req.file.mimetype || 'application/octet-stream',
+        size: req.file.size,
+        path: path.resolve(req.file.path),
+        createdAt: new Date().toISOString()
+      }, req, res, next);
+    }
+
+    if (req.is('multipart/form-data')) {
+      return res.status(400).json({ error: 'Send one file in the multipart field named "file".' });
+    }
+
+    const declaredSize = Number(req.get('content-length') || 0);
+    if (declaredSize > maxUploadBytes) {
+      return res.status(413).json({ error: `File exceeds the ${maxUploadBytes}-byte limit.` });
+    }
+
+    const id = crypto.randomBytes(12).toString('base64url');
+    const filePath = path.resolve(store.settings.storagePath, id);
+    const mimeType = (req.get('content-type') || 'application/octet-stream').split(';')[0].trim().toLowerCase();
+    let size = 0;
+    const limiter = new Transform({
+      transform(chunk, encoding, callback) {
+        size += chunk.length;
+        if (size > maxUploadBytes) {
+          const error = new Error('Upload size limit exceeded');
+          error.code = 'LIMIT_FILE_SIZE';
+          return callback(error);
+        }
+        callback(null, chunk);
+      }
+    });
+
+    try {
+      await pipeline(req, limiter, createWriteStream(filePath, { flags: 'wx', mode: 0o600 }));
+      if (size === 0) {
+        await fs.unlink(filePath).catch(() => {});
+        return res.status(400).json({ error: 'Send a file as the request body or as multipart field "file".' });
+      }
+      return saveRecord({
+        id,
+        originalName: requestFilename(req, mimeType, id),
+        mimeType,
+        size,
+        path: filePath,
+        createdAt: new Date().toISOString()
+      }, req, res, next);
+    } catch (error) {
+      await fs.unlink(filePath).catch(() => {});
+      next(error);
+    }
+  }
+
+  const handleUpload = [authenticate, upload.single('file'), acceptUpload];
   app.post('/api/upload', ...handleUpload);
   app.post('/upload', ...handleUpload);
 
@@ -171,10 +248,10 @@ export async function createApp(options = {}) {
   });
 
   app.use((error, req, res, next) => {
-    console.error(error);
-    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+    if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(413).json({ error: `File exceeds the ${maxUploadBytes}-byte limit.` });
     }
+    console.error(error);
     res.status(500).json({ error: 'Something went wrong.' });
   });
 
