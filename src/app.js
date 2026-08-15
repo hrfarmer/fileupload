@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -52,14 +51,13 @@ function publicBaseUrl(req, configured) {
 }
 
 function fileView(file, req, configuredUrl) {
-  const filename = encodeURIComponent(file.originalName);
   return {
     id: file.id,
     name: file.originalName,
     type: file.mimeType,
     size: file.size,
     createdAt: file.createdAt,
-    url: `${publicBaseUrl(req, configuredUrl)}/f/${file.id}/${filename}`
+    url: `${publicBaseUrl(req, configuredUrl)}/a/${file.id}`
   };
 }
 
@@ -83,7 +81,7 @@ export async function createApp(options = {}) {
     storage: multer.diskStorage({
       destination(req, file, callback) { callback(null, store.settings.storagePath); },
       filename(req, file, callback) {
-        req.uploadId = crypto.randomBytes(12).toString('base64url');
+        req.uploadId = store.createFileId();
         callback(null, req.uploadId);
       }
     }),
@@ -157,7 +155,7 @@ export async function createApp(options = {}) {
       return res.status(413).json({ error: `File exceeds the ${maxUploadBytes}-byte limit.` });
     }
 
-    const id = crypto.randomBytes(12).toString('base64url');
+    const id = store.createFileId();
     const filePath = path.resolve(store.settings.storagePath, id);
     const mimeType = (req.get('content-type') || 'application/octet-stream').split(';')[0].trim().toLowerCase();
     let size = 0;
@@ -228,7 +226,7 @@ export async function createApp(options = {}) {
     } catch (error) { next(error); }
   });
 
-  app.get(['/f/:id', '/f/:id/:filename'], async (req, res, next) => {
+  app.get('/a/:id', async (req, res, next) => {
     const file = store.getFile(req.params.id);
     if (!file) return res.status(404).sendFile(new URL('./public/not-found.html', import.meta.url).pathname);
     try {

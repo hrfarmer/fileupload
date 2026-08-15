@@ -35,7 +35,8 @@ test('uploads, lists, previews, and deletes a file', async t => {
   const upload = await fetch(`${baseUrl}/api/upload`, { method: 'POST', headers: { 'x-api-key': KEY }, body: form });
   assert.equal(upload.status, 201);
   const uploaded = await upload.json();
-  assert.match(uploaded.url, /^https:\/\/files\.example\.test\/f\//);
+  assert.match(uploaded.id, /^[A-Za-z0-9]{8}$/);
+  assert.equal(uploaded.url, `https://files.example.test/a/${uploaded.id}`);
   assert.equal(uploaded.name, 'hello world.txt');
 
   const list = await fetch(`${baseUrl}/api/files`, { headers: { authorization: `Bearer ${KEY}` } });
@@ -46,6 +47,7 @@ test('uploads, lists, previews, and deletes a file', async t => {
   assert.equal(preview.status, 200);
   assert.match(preview.headers.get('content-disposition'), /^inline;/);
   assert.equal(await preview.text(), 'hello world');
+  assert.equal((await fetch(`${baseUrl}/f/${uploaded.id}/hello%20world.txt`)).status, 404);
 
   const removed = await fetch(`${baseUrl}/api/files/${uploaded.id}`, { method: 'DELETE', headers: { 'x-api-key': KEY } });
   assert.equal(removed.status, 204);
@@ -65,6 +67,8 @@ test('accepts a raw file request body like Apple Shortcuts', async t => {
   });
   assert.equal(upload.status, 201);
   const uploaded = await upload.json();
+  assert.match(uploaded.id, /^[A-Za-z0-9]{8}$/);
+  assert.equal(uploaded.url, `https://files.example.test/a/${uploaded.id}`);
   assert.equal(uploaded.name, 'shortcut photo.jpg');
   assert.equal(uploaded.type, 'image/jpeg');
   assert.equal(uploaded.size, 4);
@@ -84,7 +88,7 @@ test('infers a filename when a raw upload does not provide one', async t => {
   });
   assert.equal(upload.status, 201);
   const uploaded = await upload.json();
-  assert.match(uploaded.name, /^upload-[A-Za-z0-9_-]+\.mov$/);
+  assert.match(uploaded.name, /^upload-[A-Za-z0-9]{8}\.mov$/);
   assert.equal(uploaded.type, 'video/quicktime');
 });
 

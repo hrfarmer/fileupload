@@ -2,6 +2,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+const PUBLIC_ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const PUBLIC_ID_LENGTH = 8;
+
+function randomPublicId() {
+  let id = '';
+  while (id.length < PUBLIC_ID_LENGTH) {
+    for (const byte of crypto.randomBytes(PUBLIC_ID_LENGTH)) {
+      if (byte >= 248) continue;
+      id += PUBLIC_ID_ALPHABET[byte % PUBLIC_ID_ALPHABET.length];
+      if (id.length === PUBLIC_ID_LENGTH) break;
+    }
+  }
+  return id;
+}
+
 const scrypt = (value, salt) => new Promise((resolve, reject) => {
   crypto.scrypt(value, salt, 64, (error, key) => error ? reject(error) : resolve(key));
 });
@@ -68,7 +83,25 @@ export class FileStore {
       await atomicJsonWrite(this.filesPath, this.files);
     }
 
+    const reservedIds = new Set();
+    let idsMigrated = false;
+    for (const file of this.files) {
+      if (!/^[A-Za-z0-9]{8}$/.test(file.id) || reservedIds.has(file.id)) {
+        file.id = this.createFileId(reservedIds);
+        idsMigrated = true;
+      }
+      reservedIds.add(file.id);
+    }
+    if (idsMigrated) await atomicJsonWrite(this.filesPath, this.files);
+
     await this.ensureStoragePath(this.settings.storagePath);
+  }
+
+  createFileId(reservedIds = null) {
+    const existingIds = reservedIds || new Set(this.files.map(file => file.id));
+    let id;
+    do { id = randomPublicId(); } while (existingIds.has(id));
+    return id;
   }
 
   async ensureStoragePath(storagePath) {

@@ -47,12 +47,12 @@ Successful responses use HTTP 201:
 
 ```json
 {
-  "id": "PqjBKv0nFp9sYXsC",
+  "id": "h12KLB5x",
   "name": "photo.jpg",
   "type": "image/jpeg",
   "size": 284103,
   "createdAt": "2026-08-14T20:00:00.000Z",
-  "url": "https://f.aychar.dev/f/PqjBKv0nFp9sYXsC/photo.jpg"
+  "url": "https://f.aychar.dev/a/h12KLB5x"
 }
 ```
 
@@ -91,6 +91,7 @@ See [APPLE_SHORTCUT.md](APPLE_SHORTCUT.md) for the phone shortcut recipe. It use
 - Dashboard sessions are HTTP-only, SameSite cookies and are invalidated on key rotation.
 - Uploaded active content such as HTML and SVG downloads instead of rendering on the dashboard's origin.
 - File IDs are random and public links are intentionally accessible without authentication.
+- Public IDs are 8 case-sensitive alphanumeric characters. Changing to this format invalidated the former `/f/...` link format.
 
 Back up the entire data directory, not only the uploads folder; metadata maps public IDs to stored files.
 
