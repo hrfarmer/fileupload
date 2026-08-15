@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · fileupload</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <main class="login-wrap">
+    <form class="login-card" method="post" action="/login">
+      <div class="logo" aria-hidden="true">↑</div>
+      <h1>Welcome back</h1>
+      <p class="subtle">Enter your upload API key to manage files.</p>
+      <p class="error" id="error">That API key isn't valid.</p>
+      <div class="field">
+        <label for="apiKey">API key</label>
+        <input id="apiKey" name="apiKey" type="password" autocomplete="current-password" autofocus required>
+      </div>
+      <button class="primary" type="submit">Continue</button>
+    </form>
+  </main>
+  <script>if (new URLSearchParams(location.search).has('error')) document.querySelector('#error').style.display = 'block';</script>
+</body>
+</html>

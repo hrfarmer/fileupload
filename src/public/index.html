@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>fileupload</title>
+  <link rel="stylesheet" href="/assets/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand"><span class="logo">↑</span><span>fileupload</span></div>
+      <div class="header-actions">
+        <button class="ghost" id="settingsButton">Settings</button>
+        <form method="post" action="/logout"><button class="ghost" type="submit">Sign out</button></form>
+      </div>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>Your files, one link away.</h1>
+          <p class="subtle">Private uploads. Public links. Nothing complicated.</p>
+        </div>
+      </section>
+      <label class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" multiple>
+        <strong>Drop files here or click to browse</strong>
+        <span class="subtle" id="uploadHint">Each upload gets its own shareable link.</span>
+      </label>
+      <div class="toolbar">
+        <h2>Uploads</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <section class="files" id="files"><div class="empty">Loading…</div></section>
+    </main>
+  </div>
+
+  <dialog class="modal" id="settingsModal">
+    <div class="modal-inner">
+      <h2>Settings</h2>
+      <p class="subtle">Control where new files are saved and rotate access.</p>
+      <div class="field">
+        <label for="storagePath">Storage path (new uploads)</label>
+        <input id="storagePath" spellcheck="false">
+      </div>
+      <button id="saveStorage">Save storage path</button>
+      <div class="field">
+        <label>API key</label>
+        <button class="danger" id="rotateKey">Rotate API key</button>
+        <div class="key-box" id="newKey"></div>
+        <p class="subtle">Rotation signs out every dashboard session and immediately invalidates the old key.</p>
+      </div>
+      <div class="modal-actions"><button class="primary" id="closeSettings">Done</button></div>
+    </div>
+  </dialog>
+  <div class="toast" id="toast"></div>
+  <script src="/assets/app.js" type="module"></script>
+</body>
+</html>
